@@ -70,20 +70,17 @@ class _HomeState extends State<Home> {
 
   final terminalController = TerminalController();
 
-  StringBuffer buff = StringBuffer();
+  var buff = StringBuffer();
 
   late final Pty pty;
 
-  Mode mode = Mode.command;
-
-  bool translate = true;
+  var mode = Mode.command;
 
   @override
   void initState() {
     super.initState();
 
    mode = Mode.command; 
-   translate = true;
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
@@ -92,12 +89,6 @@ class _HomeState extends State<Home> {
     );
   } 
 
-  void switchTranslate() {
-    setState(() {
-      translate = !translate;
-    });
-  }
-
   void changeMode() {
       setState(() {
         // Sets the mode to the next one in the enum
@@ -105,71 +96,51 @@ class _HomeState extends State<Home> {
       });
   }
 
-  void _startPty() {
-    pty = Pty.start(
-      shell,
-      columns: terminal.viewWidth,
-      rows: terminal.viewHeight,
-    );
+    void _startPty() {
+      pty = Pty.start(
+        shell,
+        columns: terminal.viewWidth,
+        rows: terminal.viewHeight,
+      );
 
-    pty.output
-        .cast<List<int>>()
-        .transform(Utf8Decoder())
-        .listen((text) {
-          terminal.write(text);
-          // print("Buffer: ${terminal.mainBuffer}");
-        });
+      pty.output
+          .cast<List<int>>()
+          .transform(Utf8Decoder())
+          .listen((text) {
+            terminal.write(text);
+            // print("Buffer: ${terminal.mainBuffer}");
+          });
 
-    pty.exitCode.then((code) {
-      terminal.write('the process exited with exit code $code');
-      exit(code);
-    });
+      pty.exitCode.then((code) {
+        terminal.write('the process exited with exit code $code');
+        exit(code);
+      });
 
-  terminal.onOutput = (data) async {
-    var out = const Utf8Encoder().convert(data);
+      terminal.onOutput = (data) {
+        var out = const Utf8Encoder().convert(data);
 
-    switch(out[out.length - 1]) {
-      case utf8.backspace:
-        // Remove the Backspace character
-        buff.write(buff.toString().substring(0, buff.length - 1));
-        // Remove the last character that would be removed by the Backspace character
-        buff.write(buff.toString().substring(0, buff.length - 1));
-        break;
-      case utf8.carriageReturn:
-        if (mode != Mode.command && translate) {
-          var answer = await callApi(question: buff.toString());
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              duration: Duration(seconds: 10),
-              content: Text(answer),
-              action: SnackBarAction(
-                label: 'Copy',
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: answer));
-                  switchTranslate();
-                },
-              ),
-            ),
-          );
-          // print("Answer: $answer");
-          // terminal.write(await callApi(question: buff.toString()));
-          buff.clear();
+        switch(out[out.length - 1]) {
+          case utf8.backspace:
+            // Remove the Backspace character
+            buff.write(buff.toString().substring(0, buff.length - 1));
+            // Remove the last character that would be removed by the Backspace character
+            buff.write(buff.toString().substring(0, buff.length - 1));
+            break;
+          case utf8.carriageReturn:
+            callApi(question: buff.toString());
+            buff.clear();
+            break;
+          default:
+            buff.write(data);
         }
-        break;
-      default:
-        buff.write(data);
-    }
-    
-    pty.write(const Utf8Encoder().convert(data));
-    if (mode == Mode.hybrid) {
-      switchTranslate();
-    }
-  };
 
-    terminal.onResize = (w, h, pw, ph) {
-      pty.resize(h, w);
-    };
-  }
+        pty.write(const Utf8Encoder().convert(data));
+      };
+
+      terminal.onResize = (w, h, pw, ph) {
+        pty.resize(h, w);
+      };
+    }
 
   @override
   Widget build(BuildContext context) {
@@ -182,12 +153,9 @@ class _HomeState extends State<Home> {
           if (event is RawKeyUpEvent &&
             event.logicalKey == LogicalKeyboardKey.keyM &&
             event.isControlPressed) {
+            // create a new tab here
             changeMode();
-            print("Mode: ${mode.toString().split('.').last}");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Mode: ${mode.toString().split('.').last}',
-            ),),);
+            terminal.write('Mode: ${mode.toString()}');
           }
       },
         child: TerminalView(
