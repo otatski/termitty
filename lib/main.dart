@@ -194,6 +194,7 @@ class _HomeState extends State<Home> {
     terminal.onResize = (w, h, pw, ph) {
       pty.resize(h, w);
     };
+
   }
 
   @override
