@@ -86,8 +86,8 @@ class _HomeState extends State<Home> {
   Future<String> checkCache(String command) async {
     String answer = '';
     (cache.containsKey(command))
-    ? answer = cache[command]!
-    : answer = await callApi(question: buff.toString());
+        ? answer = cache[command]!
+        : answer = await callApi(question: buff.toString());
     return answer;
   }
 
@@ -96,7 +96,7 @@ class _HomeState extends State<Home> {
     super.initState();
 
     mode = Mode.command;
-    translate = true;
+    translate = false;
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
@@ -121,6 +121,11 @@ class _HomeState extends State<Home> {
     setState(() {
       // Sets the mode to the next one in the enum
       mode = Mode.values[(mode.index + 1) % Mode.values.length];
+      if (mode == Mode.command) {
+        translateOff();
+      } else {
+        translateOn();
+      }
       buff.clear();
     });
   }
@@ -153,7 +158,7 @@ class _HomeState extends State<Home> {
           buff.write(buff.toString().substring(0, buff.length - 1));
           break;
         case utf8.carriageReturn:
-          if (mode != Mode.command && translate) { 
+          if (mode != Mode.command && translate) {
             String answer = await checkCache(buff.toString());
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -194,16 +199,30 @@ class _HomeState extends State<Home> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton( 
-        backgroundColor: (translate && mode != Mode.command) 
-          ? Colors.green
-          : Colors.red,
-        onPressed: () {},
-        child: (translate && mode != Mode.command) 
-          ? Icon(Icons.check, color: Colors.white)
-          : Icon(Icons.close, color: Colors.white),
+      bottomSheet: Container(
+        height: 30,
+        color: Colors.black,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              mode.toString().split('.').last.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+            Text(
+              'Translate: ${translate ? 'On' : 'Off'}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
       ),
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: RawKeyboardListener(
           focusNode: FocusNode(),
@@ -212,14 +231,7 @@ class _HomeState extends State<Home> {
                 event.logicalKey == LogicalKeyboardKey.keyM &&
                 event.isControlPressed) {
               changeMode();
-              print("Mode: ${mode.toString().split('.').last}");
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Mode: ${mode.toString().split('.').last}',
-                  ),
-                ),
-              );
+              // print("Mode: ${mode.toString().split('.').last}");
             }
           },
           child: TerminalView(
