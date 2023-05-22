@@ -38,7 +38,7 @@ class _HomeState extends State<Home> {
 
   int tokens = 0;
 
-  // CacheModel cache = CacheModel(cache: {});
+  final state = context.watch<CacheCubit>().state;
 
 
   Future<Map<String, Object>> checkCache(String command, BuildContext context) async {
