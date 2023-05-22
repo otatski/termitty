@@ -2,6 +2,7 @@
 import 'package:dart_openai/openai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_gpt_tokenizer/flutter_gpt_tokenizer.dart';
+// import 'package:termitty/src/cache/cache_model.dart';
 
 Future<Map<String, Object>> callApi({required String question}) async {
   await dotenv.load(fileName: "assets/.env");

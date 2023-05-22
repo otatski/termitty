@@ -5,9 +5,11 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'package:termitty/src/api.dart';
+import 'package:termitty/src/cache/cache_model.dart';
 import 'package:termitty/src/utf8_constants.dart' as utf8;
 import 'package:xterm/xterm.dart';
 import 'package:termitty/src/shell.dart';
+import 'package:termitty/src/cache/cache_cubit.dart';
 
 enum Mode { command, hybrid, nlp }
 
@@ -36,21 +38,20 @@ class _HomeState extends State<Home> {
 
   int tokens = 0;
 
-  Map<String, String> cache = {
-    'clear': 'clear',
-    'exit': 'exit',
-    'help': 'help',
-    'ls': 'ls',
-    'pwd': 'pwd',
-    'whoami': 'whoami',
-  };
+  // CacheModel cache = CacheModel(cache: {});
 
-  Future<Map<String, Object>> checkCache(String command) async {
-    Map<String, Object> answer = {'answer': '', 'tokens': 0};
-    (cache.containsKey(command))
-        ? answer = {"answer": cache[command]!, "tokens": 0}
-        : answer = await callApi(question: buff.toString());
-    return answer;
+
+  Future<Map<String, Object>> checkCache(String command, BuildContext context) async {
+    Map<String, Object> response = {'answer': '', 'tokens': 0};
+    CacheQuestionModel question = CacheQuestionModel(question: command);
+    // (cache.containsKey(question))
+    (context.read<CacheCubit>().state.containsKey(question))
+        ? response = {
+            "answer": cache[CacheQuestionModel(question: question.question)]!,
+            "tokens": 0,
+          }
+        : response = await callApi(question: buff.toString());
+    return response;
   }
 
   @override
@@ -60,6 +61,7 @@ class _HomeState extends State<Home> {
     mode = Mode.command;
     translate = false;
     tokens = 0;
+    
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
@@ -153,11 +155,14 @@ class _HomeState extends State<Home> {
               ),
             );
             if (cache.containsKey(buff.toString())) {
-              cache[buff.toString()] = answer['answer'].toString();
+              // cache[buff.toString()] = answer['answer'].toString();
+              addToCache(buff.toString(), answer['answer'].toString());
             } else {
-              cache.addAll(
-                {buff.toString(): answer['answer'].toString()},
-              );
+              setState(() {
+                cache.addAll(
+                  {buff.toString(): answer['answer'].toString()},
+                );
+              });
             }
             buff.clear();
           } else if (mode != Mode.command && !translate) {
@@ -296,7 +301,7 @@ class _HomeState extends State<Home> {
                                       ),
                                     );
                                   },
-                                ), 
+                                ),
                               ),
                             ],
                           ),
