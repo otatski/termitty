@@ -26,4 +26,11 @@ class CacheCubit extends Cubit<CacheState> {
       );
     }
   }
+
+  void addCache(CacheQuestionModel question, CacheAnswerModel answer) {
+    _cacheRepository.addCache(question, answer);
+    emit(CacheLoaded(cache: _cacheRepository.getCache()));
+  }
+
+
 }
