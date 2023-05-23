@@ -1,6 +1,6 @@
 part of 'cache_cubit.dart';
 
-enum CacheStatus { initial, loaded, error }
+enum CacheStatus { initial, loaded, loading, fetching, error }
 
 class CacheState extends Equatable {
   final CacheStatus status;
@@ -18,7 +18,15 @@ class CacheState extends Equatable {
 }
 
 class CacheInitial extends CacheState {
-  CacheInitial() : super();
+  CacheInitial() : super(status: CacheStatus.initial);
+}
+
+class CacheLoading extends CacheState {
+  CacheLoading() : super(status: CacheStatus.loading);
+}
+
+class CacheFetching extends CacheState {
+  CacheFetching() : super(status: CacheStatus.fetching);
 }
 
 class CacheLoaded extends CacheState {

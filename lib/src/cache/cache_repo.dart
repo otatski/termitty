@@ -15,39 +15,81 @@ class CacheRepository {
     CacheQuestionModel(question: 'whoami'): CacheAnswerModel(answer: 'whoami'),
   });
 
+  /// Returns the cache
   CacheModel getCache() {
     return cache;
   }
 
+  /// Adds a new cache item
+  void addCache(CacheQuestionModel question, CacheAnswerModel answer) {
+    if (answer.answer == '') {
+      return;
+    }
+    cache.cache[question] = answer;
+  }
+
+  /// Checks if the cache contains the question
+  CacheAnswerModel checkCache(CacheQuestionModel question) {
+    try {
+      return cache.cache[question]!;
+    } catch (e) {
+      return CacheAnswerModel(answer: '');
+    }
+  }
+
+  /// Updates the cache
+  void updateCache(CacheQuestionModel question, CacheAnswerModel answer) {
+    if (answer.answer == '') {
+      return;
+    }
+    cache.cache[question] = answer;
+  }
+
+  /// Removes a cache item
+  void removeCacheItem(CacheQuestionModel question) {
+    cache.cache.remove(question);
+  }
+
+  /// Calls OpenAI API to get the answer for the question
   Future<Map<String, Object>> callApi({required String question}) async {
-    await dotenv.load(fileName: "assets/.env");
-    // print(dotenv.env['KEY']);
-    print("Question: $question");
+    try {
+      await dotenv.load(fileName: "assets/.env");
+      // print(dotenv.env['KEY']);
+      print("Question: $question");
 
-    OpenAI.apiKey = dotenv.env['KEY']!;
+      OpenAI.apiKey = dotenv.env['KEY']!;
 
-    final model = "gpt-3.5-turbo";
+      final model = "gpt-3.5-turbo";
 
-    final prompt =
-        "Returning only the command, what is the Debian Linux shell command for: $question\n";
+      final prompt =
+          "Returning only the command, what is the Debian Linux shell command for: $question\n";
 
-    final tokens = await Tokenizer().count(prompt, modelName: model);
+      final tokens = await Tokenizer().count(prompt, modelName: model);
 
-    OpenAIChatCompletionModel chatCompletion =
-        await OpenAI.instance.chat.create(
-      model: model,
-      messages: [
-        OpenAIChatCompletionChoiceMessageModel(
-          role: OpenAIChatMessageRole.user,
-          content: prompt,
-        ),
-      ],
-    );
+      OpenAIChatCompletionModel chatCompletion =
+          await OpenAI.instance.chat.create(
+        model: model,
+        messages: [
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.user,
+            content: prompt,
+          ),
+        ],
+      );
 
-    print('completion: ${chatCompletion.choices.first.message.content}');
-    return {
-      "answer": chatCompletion.choices.first.message.content,
-      "tokens": tokens,
-    };
+      print('completion: ${chatCompletion.choices.first.message.content}');
+      return {
+        "answer": chatCompletion.choices.first.message.content,
+        "tokens": tokens,
+      };
+    } catch (e) {
+      print(e);
+      return {
+        "answer": '',
+        "tokens": 0,
+      };
+    }
   }
 }
+
+

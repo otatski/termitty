@@ -11,7 +11,8 @@ import 'package:xterm/xterm.dart';
 import 'package:termitty/src/shell.dart';
 import 'package:termitty/src/cache/cache_cubit.dart';
 
-enum Mode { command, hybrid, nlp }
+import 'package:termitty/src/pty/pty.dart';
+
 
 class Home extends StatefulWidget {
   Home({Key? key}) : super(key: key);
@@ -36,23 +37,7 @@ class _HomeState extends State<Home> {
 
   bool translate = true;
 
-  int tokens = 0;
-
-  final state = context.watch<CacheCubit>().state;
-
-
-  Future<Map<String, Object>> checkCache(String command, BuildContext context) async {
-    Map<String, Object> response = {'answer': '', 'tokens': 0};
-    CacheQuestionModel question = CacheQuestionModel(question: command);
-    // (cache.containsKey(question))
-    (context.read<CacheCubit>().state.containsKey(question))
-        ? response = {
-            "answer": cache[CacheQuestionModel(question: question.question)]!,
-            "tokens": 0,
-          }
-        : response = await callApi(question: buff.toString());
-    return response;
-  }
+  int tokens = 0; 
 
   @override
   void initState() {
@@ -65,7 +50,7 @@ class _HomeState extends State<Home> {
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
-        if (mounted) _startPty();
+        if (mounted) startPty(context);
       },
     );
   }
@@ -101,87 +86,7 @@ class _HomeState extends State<Home> {
     });
   }
 
-  void _startPty() {
-    pty = Pty.start(
-      shell,
-      columns: terminal.viewWidth,
-      rows: terminal.viewHeight,
-    );
-
-    pty.output.cast<List<int>>().transform(Utf8Decoder()).listen((text) {
-      terminal.write(text);
-      // print("Buffer: ${terminal.mainBuffer}");
-    });
-
-    pty.exitCode.then((code) {
-      terminal.write('the process exited with exit code $code');
-      exit(code);
-    });
-
-    terminal.onOutput = (data) async {
-      var out = const Utf8Encoder().convert(data);
-
-      switch (out[out.length - 1]) {
-        case utf8.backspace:
-          // Remove the Backspace character
-          buff.write(buff.toString().substring(0, buff.length - 1));
-          // Remove the last character that would be removed by the Backspace character
-          buff.write(buff.toString().substring(0, buff.length - 1));
-          break;
-        case utf8.carriageReturn:
-          print("Buffer: ${buff.toString()} | Length: ${buff.length}"); // Debug
-          if (mode != Mode.command && translate) {
-            if (buff.length == 0) {
-              buff.clear();
-              break;
-            }
-            Map<String, Object> answer = await checkCache(buff.toString());
-            addToken(answer['tokens'] as int);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                duration: Duration(seconds: 10),
-                content: Text(answer['answer'].toString()),
-                action: SnackBarAction(
-                  label: 'Copy',
-                  onPressed: () {
-                    Clipboard.setData(
-                      ClipboardData(
-                        text: answer['answer'].toString(),
-                      ),
-                    );
-                    translateOff();
-                  },
-                ),
-              ),
-            );
-            if (cache.containsKey(buff.toString())) {
-              // cache[buff.toString()] = answer['answer'].toString();
-              addToCache(buff.toString(), answer['answer'].toString());
-            } else {
-              setState(() {
-                cache.addAll(
-                  {buff.toString(): answer['answer'].toString()},
-                );
-              });
-            }
-            buff.clear();
-          } else if (mode != Mode.command && !translate) {
-            translateOn();
-            buff.clear();
-          }
-          break;
-        default:
-          buff.write(data);
-        // print("Buffer: ${buff.toString()}"); // Debug
-      }
-      pty.write(const Utf8Encoder().convert(data));
-      // print("Data: $data"); // Debug
-    };
-
-    terminal.onResize = (w, h, pw, ph) {
-      pty.resize(h, w);
-    };
-  }
+  
 
   @override
   Widget build(BuildContext context) {
