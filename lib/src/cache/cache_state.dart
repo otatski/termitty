@@ -5,13 +5,18 @@ enum CacheStatus { initial, loaded, loading, fetching, error }
 class CacheState extends Equatable {
   final CacheStatus status;
   final CacheModel cache;
+  final CacheAnswerModel answer;
+  final int tokens;
   final Exception? error;
 
   CacheState({
     this.status = CacheStatus.initial,
     CacheModel? cache,
+    CacheAnswerModel? answer,
+    this.tokens = 0,
     this.error,
-  }) : cache = cache ?? CacheModel.empty;
+  }) : cache = cache ?? CacheModel.empty,
+       answer = answer ?? CacheAnswerModel.empty;
 
   @override
   List<Object> get props => [];
@@ -44,6 +49,7 @@ class CacheLoaded extends CacheState {
   }) {
     return CacheLoaded(
       cache: cache ?? this.cache,
+
     );
   }
 }

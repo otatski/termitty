@@ -101,6 +101,16 @@ class CacheQuestionModel extends Equatable {
   bool get isNotEmpty => question.isNotEmpty;
 
   int get length => question.length;
+
+  String get getQuestion => question;
+
+  static CacheQuestionModel get empty => CacheQuestionModel(question: '');
+
+  static CacheQuestionModel emptyQuestion() {
+    return CacheQuestionModel(
+      question: '',
+    );
+  }
 }
 
 class CacheAnswerModel extends Equatable {
@@ -115,6 +125,7 @@ class CacheAnswerModel extends Equatable {
   @override
   List<Object> get props => [
         answer,
+        tokens,
       ];
 
   CacheAnswerModel copyWith({
@@ -134,6 +145,17 @@ class CacheAnswerModel extends Equatable {
   int get length => answer.length;
 
   int get getTokens => tokens;
+
+  String get getAnswer => answer;
+
+  static CacheAnswerModel get empty => CacheAnswerModel(answer: '');
+
+  static CacheAnswerModel emptyAnswer() {
+    return CacheAnswerModel(
+      answer: '',
+    );
+  }
+
 }
 
 Map<CacheQuestionModel, CacheAnswerModel> cacheDefault = {

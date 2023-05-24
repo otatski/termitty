@@ -4,24 +4,28 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:termitty/src/cache/cache_cubit.dart';
 import 'package:termitty/src/mode/mode_cubit.dart';
 import 'package:termitty/src/translate/translate_cubit.dart';
-import 'package:termitty/src/api.dart';
+// import 'package:termitty/src/api.dart';
 import 'package:termitty/src/cache/cache_model.dart';
+// import 'package:termitty/src/cache/cache_repo.dart';
 import 'package:termitty/src/utf8_constants.dart' as utf8;
 import 'package:xterm/xterm.dart';
 import 'package:termitty/src/shell.dart';
 
-
 void startPty(BuildContext context) {
+  // CacheRepository cacheRepository = RepositoryProvider.of<CacheRepository>(context);
+  final cache = context.read<CacheCubit>();
+  final mode = context.read<ModeCubit>();
+  final translate = context.read<TranslateCubit>();
+
   final terminal = Terminal(
     maxLines: 10000,
   );
 
   late final Pty pty;
-
-  Mode mode = Mode.command;
 
   pty = Pty.start(
     shell,
@@ -53,41 +57,48 @@ void startPty(BuildContext context) {
         break;
       case utf8.carriageReturn:
         print("Buffer: ${buff.toString()} | Length: ${buff.length}"); // Debug
-        if (mode != Mode.command && translate) {
+        if (!mode.commandMode && translate.isTranslate) {
           if (buff.length == 0) {
             buff.clear();
             break;
           }
+          await cache.callApi(question: data);
+          // final answer = cache.state.answer;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               duration: Duration(seconds: 10),
-              content: Text(answer['answer'].toString()),
+              content: Text(
+                cache.state.answer.toString(),
+              ),
               action: SnackBarAction(
                 label: 'Copy',
                 onPressed: () {
                   Clipboard.setData(
                     ClipboardData(
-                      text: answer['answer'].toString(),
+                      text: cache.state.answer.toString(),
                     ),
                   );
-                  translateOff();
+                  translate.dontTranslate();
                 },
               ),
             ),
           );
-          if (cache.containsKey(buff.toString())) {
-            // cache[buff.toString()] = answer['answer'].toString();
-            addToCache(buff.toString(), answer['answer'].toString());
-          } else {
-            setState(() {
-              cache.addAll(
-                {buff.toString(): answer['answer'].toString()},
-              );
-            });
-          }
+          if (cache
+              .checkCache(CacheQuestionModel(question: buff.toString())).isNotEmpty) {
+
+            cache.addCache(
+              CacheQuestionModel(
+                question: buff.toString(),
+              ),
+              CacheAnswerModel(
+                answer: cache.state.answer.toString(),
+              ),
+            );
+          } 
           buff.clear();
-        } else if (mode != Mode.command && !translate) {
-          translateOn();
+        } else if (!mode.commandMode && !translate.isTranslate) {
+          // translateOn();
+          translate.doTranslate();
           buff.clear();
         }
         break;

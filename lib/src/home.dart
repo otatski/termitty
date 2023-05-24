@@ -3,16 +3,18 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_pty/flutter_pty.dart';
-import 'package:termitty/src/api.dart';
+// import 'package:termitty/src/api.dart';
 import 'package:termitty/src/cache/cache_model.dart';
 import 'package:termitty/src/utf8_constants.dart' as utf8;
 import 'package:xterm/xterm.dart';
 import 'package:termitty/src/shell.dart';
 import 'package:termitty/src/cache/cache_cubit.dart';
+import 'package:termitty/src/mode/mode_cubit.dart';
+import 'package:termitty/src/translate/translate_cubit.dart';
 
-import 'package:termitty/src/pty/pty.dart';
-
+// import 'package:termitty/src/pty/pty.dart';
 
 class Home extends StatefulWidget {
   Home({Key? key}) : super(key: key);
@@ -29,24 +31,13 @@ class _HomeState extends State<Home> {
 
   final terminalController = TerminalController();
 
-  StringBuffer buff = StringBuffer();
+  // StringBuffer buff = StringBuffer();
 
   late final Pty pty;
-
-  Mode mode = Mode.command;
-
-  bool translate = true;
-
-  int tokens = 0; 
 
   @override
   void initState() {
     super.initState();
-
-    mode = Mode.command;
-    translate = false;
-    tokens = 0;
-    
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
@@ -55,41 +46,114 @@ class _HomeState extends State<Home> {
     );
   }
 
-  void addToken(int count) {
-    setState(() {
-      tokens += count;
-    });
-  }
+  void startPty(BuildContext context) {
+    // CacheRepository cacheRepository = RepositoryProvider.of<CacheRepository>(context);
+    // final cache = context.read<CacheCubit>();
+    final cache = BlocProvider.of<CacheCubit>(context);
+    // final mode = context.read<ModeCubit>();
+    final mode = BlocProvider.of<ModeCubit>(context);
+    // final translate = context.read<TranslateCubit>();
+    final translate = BlocProvider.of<TranslateCubit>(context);
 
-  void translateOn() {
-    setState(() {
-      translate = true;
-    });
-  }
+    final terminal = Terminal(
+      maxLines: 10000,
+    );
 
-  void translateOff() {
-    setState(() {
-      translate = false;
-    });
-  }
+    late final Pty pty;
 
-  void changeMode() {
-    setState(() {
-      // Sets the mode to the next one in the enum
-      mode = Mode.values[(mode.index + 1) % Mode.values.length];
-      if (mode == Mode.command) {
-        translateOff();
-      } else {
-        translateOn();
+    pty = Pty.start(
+      shell,
+      columns: terminal.viewWidth,
+      rows: terminal.viewHeight,
+    );
+
+    StringBuffer buff = StringBuffer();
+
+    pty.output.cast<List<int>>().transform(Utf8Decoder()).listen((text) {
+      terminal.write(text);
+      // print("Buffer: ${terminal.mainBuffer}");
+    });
+
+    pty.exitCode.then((code) {
+      terminal.write('the process exited with exit code $code');
+      exit(code);
+    });
+
+    terminal.onOutput = (data) async {
+      var out = const Utf8Encoder().convert(data);
+
+      switch (out[out.length - 1]) {
+        case utf8.backspace:
+          // Remove the Backspace character
+          buff.write(buff.toString().substring(0, buff.length - 1));
+          // Remove the last character that would be removed by the Backspace character
+          buff.write(buff.toString().substring(0, buff.length - 1));
+          break;
+        case utf8.carriageReturn:
+          print("Buffer: ${buff.toString()} | Length: ${buff.length}"); // Debug
+          if (!mode.commandMode && translate.isTranslate) {
+            if (buff.length == 0) {
+              buff.clear();
+              break;
+            }
+            await cache.callApi(question: data);
+            // final answer = cache.state.answer;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                duration: Duration(seconds: 10),
+                content: Text(
+                  cache.state.answer.toString(),
+                ),
+                action: SnackBarAction(
+                  label: 'Copy',
+                  onPressed: () {
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: cache.state.answer.toString(),
+                      ),
+                    );
+                    translate.dontTranslate();
+                  },
+                ),
+              ),
+            );
+            if (cache
+                .checkCache(CacheQuestionModel(question: buff.toString()))
+                .isNotEmpty) {
+              cache.addCache(
+                CacheQuestionModel(
+                  question: buff.toString(),
+                ),
+                CacheAnswerModel(
+                  answer: cache.state.answer.toString(),
+                ),
+              );
+            }
+            buff.clear();
+          } else if (!mode.commandMode && !translate.isTranslate) {
+            // translateOn();
+            translate.doTranslate();
+            buff.clear();
+          }
+          break;
+        default:
+          buff.write(data);
+        // print("Buffer: ${buff.toString()}"); // Debug
       }
-      buff.clear();
-    });
-  }
+      pty.write(const Utf8Encoder().convert(data));
+      // print("Data: $data"); // Debug
+    };
 
-  
+    terminal.onResize = (w, h, pw, ph) {
+      pty.resize(h, w);
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cache = context.watch<CacheCubit>().state;
+    final mode = context.watch<ModeCubit>().state;
+    final translate = context.watch<TranslateCubit>().state;
     return Scaffold(
       bottomSheet: Container(
         height: 30,
@@ -99,22 +163,30 @@ class _HomeState extends State<Home> {
           children: [
             Padding(
               padding: EdgeInsets.only(left: 10),
-              child: Text(
-                mode.toString().split('.').last.toUpperCase(),
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
+              child: BlocBuilder(
+                builder: (context, modeState) {
+                  return Text(
+                    mode.status.toString().split('.').last.toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  );
+                },
               ),
             ),
             Padding(
               padding: EdgeInsets.only(right: 10),
-              child: Text(
-                'Translate: ${translate ? 'On' : 'Off'}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
+              child: BlocBuilder(
+                builder: (context, translateState) {
+                  return Text(
+                    'Translate: ${translate.translate ? 'On' : 'Off'}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -128,9 +200,10 @@ class _HomeState extends State<Home> {
             if (event is RawKeyUpEvent &&
                 event.logicalKey == LogicalKeyboardKey.keyM &&
                 event.isControlPressed) {
-              changeMode();
+              // changeMode();
+              context.read<ModeCubit>().changeMode();
               // Clear the buffer
-              buff.clear();
+              // buff.clear();
             }
             if (event is RawKeyUpEvent &&
                 event.logicalKey == LogicalKeyboardKey.keyN &&
@@ -161,7 +234,7 @@ class _HomeState extends State<Home> {
                                 child: Column(
                                   children: [
                                     Text(
-                                      'Amount of tokens used for translation, this session: ${tokens.toString()}',
+                                      'Amount of tokens used for translation, this session: ${cache.tokens.toString()}',
                                     ),
                                     const Spacer(),
                                     const Text(
@@ -169,7 +242,7 @@ class _HomeState extends State<Home> {
                                     ),
                                     // $0.002 / 1K tokens
                                     Text(
-                                      "\$${((tokens / 1000) * 0.002).toStringAsFixed(4)}",
+                                      "\$${((cache.tokens / 1000) * 0.002).toStringAsFixed(4)}",
                                     ),
                                     const Spacer(),
                                   ],
@@ -179,17 +252,21 @@ class _HomeState extends State<Home> {
                                 padding: const EdgeInsets.all(8),
                                 color: Colors.teal[200],
                                 child: ListView.builder(
-                                  itemCount: cache.length,
+                                  itemCount: cache.cache.length,
                                   itemBuilder: (context, index) {
                                     return ListTile(
                                       title: Text(
-                                        cache.keys.elementAt(index),
+                                        cache.cache.getCache.keys
+                                            .elementAt(index)
+                                            .toString(),
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       subtitle: Text(
-                                        cache.values.elementAt(index),
+                                        cache.cache.getCache.values
+                                            .elementAt(index)
+                                            .toString(),
                                       ),
                                       trailing: IconButton(
                                         icon: Icon(
@@ -198,8 +275,9 @@ class _HomeState extends State<Home> {
                                         ),
                                         onPressed: () {
                                           setState(() {
-                                            cache.remove(
-                                              cache.keys.elementAt(index),
+                                            cache.cache.remove(
+                                              cache.cache.getCache.keys
+                                                  .elementAt(index),
                                             );
                                           });
                                         },
@@ -217,7 +295,7 @@ class _HomeState extends State<Home> {
                 },
               );
               // Clear the buffer
-              buff.clear();
+              // buff.clear();
             }
           },
           child: TerminalView(

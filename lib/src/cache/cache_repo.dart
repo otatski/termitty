@@ -1,5 +1,5 @@
 import 'package:termitty/src/cache/cache_model.dart';
-import 'package:dart_openai/openai.dart';
+import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_gpt_tokenizer/flutter_gpt_tokenizer.dart';
 
@@ -51,7 +51,7 @@ class CacheRepository {
   }
 
   /// Calls OpenAI API to get the answer for the question
-  Future<Map<String, Object>> callApi({required String question}) async {
+  Future<CacheAnswerModel> callApi({required String question}) async {
     try {
       await dotenv.load(fileName: "assets/.env");
       // print(dotenv.env['KEY']);
@@ -78,16 +78,11 @@ class CacheRepository {
       );
 
       print('completion: ${chatCompletion.choices.first.message.content}');
-      return {
-        "answer": chatCompletion.choices.first.message.content,
-        "tokens": tokens,
-      };
+      CacheAnswerModel answer = CacheAnswerModel(answer: chatCompletion.choices.first.message.content, tokens: tokens);
+      return answer;
     } catch (e) {
       print(e);
-      return {
-        "answer": '',
-        "tokens": 0,
-      };
+      return CacheAnswerModel(answer: '', tokens: 0);
     }
   }
 }
