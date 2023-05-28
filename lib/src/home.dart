@@ -1,18 +1,15 @@
-import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:termitty/src/shell.dart';
+import 'package:termitty/src/utf8_constants.dart' as utf8;
 import 'package:flutter/services.dart';
 import 'package:flutter_pty/flutter_pty.dart';
-import 'package:termitty/src/api.dart';
-import 'package:termitty/src/cache/cache_model.dart';
-import 'package:termitty/src/utf8_constants.dart' as utf8;
+import 'package:flutter/material.dart';
 import 'package:xterm/xterm.dart';
-import 'package:termitty/src/shell.dart';
-import 'package:termitty/src/cache/cache_cubit.dart';
+import 'package:termitty/src/api.dart';
 
-import 'package:termitty/src/pty/pty.dart';
-
+enum Mode { command, hybrid, nlp }
 
 class Home extends StatefulWidget {
   Home({Key? key}) : super(key: key);
@@ -37,7 +34,24 @@ class _HomeState extends State<Home> {
 
   bool translate = true;
 
-  int tokens = 0; 
+  int tokens = 0;
+
+  Map<String, String> cache = {
+    'clear': 'clear',
+    'exit': 'exit',
+    'help': 'help',
+    'ls': 'ls',
+    'pwd': 'pwd',
+    'whoami': 'whoami',
+  };
+
+  Future<Map<String, Object>> checkCache(String command) async {
+    Map<String, Object> answer = {'answer': '', 'tokens': 0};
+    (cache.containsKey(command))
+        ? answer = {"answer": cache[command]!, "tokens": 0}
+        : answer = await callApi(question: buff.toString());
+    return answer;
+  }
 
   @override
   void initState() {
@@ -46,11 +60,10 @@ class _HomeState extends State<Home> {
     mode = Mode.command;
     translate = false;
     tokens = 0;
-    
 
     WidgetsBinding.instance.endOfFrame.then(
       (_) {
-        if (mounted) startPty(context);
+        if (mounted) _startPty();
       },
     );
   }
@@ -86,7 +99,84 @@ class _HomeState extends State<Home> {
     });
   }
 
-  
+  void _startPty() {
+    pty = Pty.start(
+      shell,
+      columns: terminal.viewWidth,
+      rows: terminal.viewHeight,
+    );
+
+    pty.output
+        .cast<List<int>>()
+        .transform(Utf8Decoder())
+        .listen(terminal.write);
+
+    pty.exitCode.then((code) {
+      terminal.write('the process exited with exit code $code');
+      exit(code);
+    });
+
+    terminal.onOutput = (data) async {
+      var out = const Utf8Encoder().convert(data);
+
+      switch (out[out.length - 1]) {
+        case utf8.backspace:
+          // Remove the Backspace character
+          buff.write(buff.toString().substring(0, buff.length - 1));
+          // Remove the last character that would be removed by the Backspace character
+          buff.write(buff.toString().substring(0, buff.length - 1));
+          break;
+        case utf8.carriageReturn:
+          print("Buffer: ${buff.toString()} | Length: ${buff.length}"); // Debug
+          if (mode != Mode.command && translate) {
+            if (buff.length == 0) {
+              buff.clear();
+              break;
+            }
+            Map<String, Object> answer = await checkCache(buff.toString());
+            addToken(answer['tokens'] as int);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                duration: Duration(seconds: 10),
+                content: Text(answer['answer'].toString()),
+                action: SnackBarAction(
+                  label: 'Copy',
+                  onPressed: () {
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: answer['answer'].toString(),
+                      ),
+                    );
+                    translateOff();
+                  },
+                ),
+              ),
+            );
+            if (cache.containsKey(buff.toString())) {
+              cache[buff.toString()] = answer['answer'].toString();
+            } else {
+              cache.addAll(
+                {buff.toString(): answer['answer'].toString()},
+              );
+            }
+            buff.clear();
+          } else if (mode != Mode.command && !translate) {
+            translateOn();
+            buff.clear();
+          }
+          break;
+        default:
+          buff.write(data);
+        // print("Buffer: ${buff.toString()}"); // Debug
+      }
+      pty.write(const Utf8Encoder().convert(data));
+      // print("Data: $data"); // Debug
+    };
+
+    terminal.onResize = (w, h, pw, ph) {
+      pty.resize(h, w);
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,75 +233,78 @@ class _HomeState extends State<Home> {
                       child: Text('Termitty'),
                     ),
                     children: [
-                      Padding(
-                        padding: EdgeInsets.all(10),
-                        child: SizedBox(
-                          width: MediaQuery.of(context).size.width / 2,
-                          height: MediaQuery.of(context).size.height / 2,
-                          child: GridView.count(
-                            primary: false,
-                            padding: const EdgeInsets.all(20),
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            crossAxisCount: 2,
-                            children: <Widget>[
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                color: Colors.teal[100],
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      'Amount of tokens used for translation, this session: ${tokens.toString()}',
-                                    ),
-                                    const Spacer(),
-                                    const Text(
-                                      'Total cost of all translation, this session:',
-                                    ),
-                                    // $0.002 / 1K tokens
-                                    Text(
-                                      "\$${((tokens / 1000) * 0.002).toStringAsFixed(4)}",
-                                    ),
-                                    const Spacer(),
-                                  ],
+                      StatefulBuilder(builder:
+                          (BuildContext context, StateSetter setState) {
+                        return Padding(
+                          padding: EdgeInsets.all(10),
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width / 2,
+                            height: MediaQuery.of(context).size.height / 2,
+                            child: GridView.count(
+                              primary: false,
+                              padding: const EdgeInsets.all(20),
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                              crossAxisCount: 2,
+                              children: <Widget>[
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  color: Colors.teal[100],
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'Amount of tokens used for translation, this session: ${tokens.toString()}',
+                                      ),
+                                      const Spacer(),
+                                      const Text(
+                                        'Total cost of all translation, this session:',
+                                      ),
+                                      // $0.002 / 1K tokens
+                                      Text(
+                                        "\$${((tokens / 1000) * 0.002).toStringAsFixed(4)}",
+                                      ),
+                                      const Spacer(),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                color: Colors.teal[200],
-                                child: ListView.builder(
-                                  itemCount: cache.length,
-                                  itemBuilder: (context, index) {
-                                    return ListTile(
-                                      title: Text(
-                                        cache.keys.elementAt(index),
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  color: Colors.teal[200],
+                                  child: ListView.builder(
+                                    itemCount: cache.length,
+                                    itemBuilder: (context, index) {
+                                      return ListTile(
+                                        title: Text(
+                                          cache.keys.elementAt(index),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                      subtitle: Text(
-                                        cache.values.elementAt(index),
-                                      ),
-                                      trailing: IconButton(
-                                        icon: Icon(
-                                          Icons.delete,
-                                          color: Colors.red,
+                                        subtitle: Text(
+                                          cache.values.elementAt(index),
                                         ),
-                                        onPressed: () {
-                                          setState(() {
-                                            cache.remove(
-                                              cache.keys.elementAt(index),
-                                            );
-                                          });
-                                        },
-                                      ),
-                                    );
-                                  },
+                                        trailing: IconButton(
+                                          icon: Icon(
+                                            Icons.delete,
+                                            color: Colors.red,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              cache.remove(
+                                                cache.keys.elementAt(index),
+                                              );
+                                            });
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                     ],
                   );
                 },
@@ -245,3 +338,4 @@ class _HomeState extends State<Home> {
     );
   }
 }
+

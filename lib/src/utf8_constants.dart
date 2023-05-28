@@ -7,5 +7,3 @@ const int carriageReturn = 13;
 const int tab = 9;
 const int backspace = 8;
 const int nullChar = 0;
-
-

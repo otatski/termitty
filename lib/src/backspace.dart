@@ -1,4 +1,3 @@
-// import 'package:flutter/material.dart';
 import 'package:xterm/xterm.dart';
 
 class BackspaceHandler extends TerminalInputHandler {

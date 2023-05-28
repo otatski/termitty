@@ -1,8 +1,7 @@
 // import 'package:flutter/services.dart';
-import 'package:dart_openai/openai.dart';
+import 'package:dart_openai/dart_openai.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_gpt_tokenizer/flutter_gpt_tokenizer.dart';
-// import 'package:termitty/src/cache/cache_model.dart';
 
 Future<Map<String, Object>> callApi({required String question}) async {
   await dotenv.load(fileName: "assets/.env");
@@ -10,10 +9,11 @@ Future<Map<String, Object>> callApi({required String question}) async {
   print("Question: $question");
 
   OpenAI.apiKey = dotenv.env['KEY']!;
-  
+
   final model = "gpt-3.5-turbo";
 
-  final prompt = "Returning only the command, what is the Debian Linux shell command for: $question\n";
+  final prompt =
+      "Returning only the command, what is the Debian Linux shell command for: $question\n";
 
   final tokens = await Tokenizer().count(prompt, modelName: model);
 
@@ -28,5 +28,8 @@ Future<Map<String, Object>> callApi({required String question}) async {
   );
 
   print('completion: ${chatCompletion.choices.first.message.content}');
-  return {"answer": chatCompletion.choices.first.message.content, "tokens": tokens};
+  return {
+    "answer": chatCompletion.choices.first.message.content,
+    "tokens": tokens,
+  };
 }

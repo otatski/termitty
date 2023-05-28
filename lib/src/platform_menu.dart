@@ -22,7 +22,7 @@ class _AppPlatformMenuState extends State<AppPlatformMenu> {
     return PlatformMenuBar(
       menus: [
         PlatformMenu(
-          label: 'TerminalStudio',
+          label: 'Termitty',
           menus: [
             if (PlatformProvidedMenuItem.hasMenu(
               PlatformProvidedMenuItemType.about,

@@ -22,7 +22,7 @@ assets/.env
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
-#.vscode/
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -34,6 +34,9 @@ assets/.env
 .pub-cache/
 .pub/
 /build/
+
+# Android related
+*android/
 
 # Web related
 lib/generated_plugin_registrant.dart
